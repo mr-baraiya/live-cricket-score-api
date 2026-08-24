@@ -14,7 +14,7 @@ A clean, modular Python FastAPI project that scrapes publicly accessible Cricbuz
 
 ---
 
-## Features 🚀
+## Features
 
 - **Modular Architecture**: Complete separation of HTTP client (`scraper/client.py`), fallback selector registry (`scraper/selectors.py`), safe parsers (`scraper/event_parser.py`), Pydantic data models (`models/`), caching and change detection (`services/`), and FastAPI routes (`app.py`).
 - **Robust Event Classification**: Categorizes deliveries into `DOT`, `SINGLE`, `TWO`, `THREE`, `FOUR`, `FIVE`, `SIX`, `WIDE`, `NO_BALL`, `BYE`, `LEG_BYE`, `WICKET`, `PENALTY`, `UNKNOWN`.
