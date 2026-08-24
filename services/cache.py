@@ -27,4 +27,7 @@ class SimpleCache:
         return self._locks[key]
 
 
-match_cache = SimpleCache(ttl=3.0)
+import os
+
+cache_ttl_env = float(os.getenv("CACHE_TTL", "3.0"))
+match_cache = SimpleCache(ttl=cache_ttl_env)

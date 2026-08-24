@@ -53,4 +53,9 @@ class CricbuzzHTTPClient:
         raise RuntimeError("Unexpected error in HTTP client retry loop")
 
 
-http_client = CricbuzzHTTPClient()
+import os
+
+timeout_env = float(os.getenv("SCRAPER_TIMEOUT", "10.0"))
+retries_env = int(os.getenv("SCRAPER_MAX_RETRIES", "2"))
+
+http_client = CricbuzzHTTPClient(timeout=timeout_env, max_retries=retries_env)

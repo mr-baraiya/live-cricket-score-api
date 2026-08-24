@@ -26,19 +26,20 @@ class EventParser:
             "dismissal_text": None,
         }
 
+        # Remove MID-WICKET so it doesn't trigger false WICKET
+        clean_for_wicket = re.sub(r"\bMID-WICKET\b|\bMID WICKET\b", "", text_upper)
+
         # 1. Check explicit WICKET dismissal first
         is_real_wicket = False
         if "WICKET" in tag_upper or "OUT" in tag_upper:
             is_real_wicket = True
-        elif re.search(r"\b(OUT|WICKET)\b", text_upper) and not any(k in text_upper for k in ["NOT OUT", "APPEAL"]):
+        elif re.search(r"\b(OUT|WICKET)\b", clean_for_wicket) and not any(k in clean_for_wicket for k in ["NOT OUT", "APPEAL"]):
             is_real_wicket = True
-        elif re.search(r"\b(C\s+[A-ZA-Z.'-]+\s+B\s+|LBW\s+B\s+|B\s+[A-ZA-Z.'-]+|\bRUN OUT\b|\bSTUMPED\b)", text_upper):
-            # Check it's not just an appeal
-            if "APPEAL" not in text_upper and "UMPIRE'S CALL" not in text_upper and "NOT OUT" not in text_upper:
+        elif re.search(r"\b(C\s+[A-ZA-Z.'-]+\s+B\s+|LBW\s+B\s+|B\s+[A-ZA-Z.'-]+|\bRUN OUT\b|\bSTUMPED\b)", clean_for_wicket):
+            if "APPEAL" not in clean_for_wicket and "UMPIRE'S CALL" not in clean_for_wicket and "NOT OUT" not in clean_for_wicket:
                 is_real_wicket = True
 
         if is_real_wicket:
-            # Parse dismissal info from commentary text e.g. "c Jaiswal b Suthar" or "lbw b Siraj"
             dismissal_info["dismissal_text"] = comm_text
             m_c = re.search(r"\bc\s+([A-Za-z.'\s-]+?)\s+b\s+([A-Za-z.'\s-]+)", comm_text, re.I)
             if m_c:

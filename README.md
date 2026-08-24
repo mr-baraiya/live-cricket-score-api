@@ -1,150 +1,185 @@
-# Live Cricket Score API
+# Live Cricket Score & Commentary API
 
-Free Cricket API - Scrape the data using BeautifulSoup and export a output via JSON using FastAPI framework.  
+A clean, modular Python FastAPI project that scrapes publicly accessible Cricbuzz pages and exposes normalized JSON APIs for live match tracking, scorecards, ball-by-ball commentary, and change detection.
 
-## Disclaimer
+---
 
-This is **not an official API provided by Cricbuzz**.
-This is an **unofficial API that retrieves data by scraping publicly available content from Cricbuzz** and is **not affiliated with, authorized, sponsored, or endorsed by Cricbuzz** in any manner.
+## Disclaimer & Legal Usage Note
 
-This project is created **strictly for educational, learning, and personal development purposes only**. It is intended to demonstrate data scraping, API structuring, and related technical concepts.
+- **Not an official API provided by Cricbuzz.**
+- This project retrieves data by scraping publicly available web content from Cricbuzz and is **not affiliated with, authorized, sponsored, or endorsed by Cricbuzz**.
+- This project is created **for development, learning, and personal experimentation purposes only**.
+- While this scraper source code itself is licensed under the MIT License, the underlying Cricbuzz match data, team names, trademarks, and commentary text remain the property of their respective owners and are **not licensed for public or commercial redistribution**.
+- All credits go to **[Cricbuzz](https://www.cricbuzz.com/)**.
 
-Use of this API in any **production environment or commercial application is entirely at your own risk**. The author and contributors are **not responsible for any service disruptions, inaccurate data, legal issues, or policy violations** resulting from its usage.
+---
 
-All website content, trademarks, logos, match data, and related assets remain the property of their respective owners.
+## Features 🚀
 
-**All credits go to <https://www.cricbuzz.com/>**  
+- **Modular Architecture**: Complete separation of HTTP client (`scraper/client.py`), fallback selector registry (`scraper/selectors.py`), safe parsers (`scraper/event_parser.py`), Pydantic data models (`models/`), caching and change detection (`services/`), and FastAPI routes (`app.py`).
+- **Robust Event Classification**: Categorizes deliveries into `DOT`, `SINGLE`, `TWO`, `THREE`, `FOUR`, `FIVE`, `SIX`, `WIDE`, `NO_BALL`, `BYE`, `LEG_BYE`, `WICKET`, `PENALTY`, `UNKNOWN`.
+- **5-Run Delivery Support**: Accurately extracts 5-run deliveries (`FIVE`, `runs: 5`).
+- **False-WICKET Protection**: Strict dismissal keyword matching prevents false LBW appeals or umpire's calls from being misclassified as wickets.
+- **Deterministic `event_id`**: Generates a stable unique delivery identifier (`matchId-innings-over.ball-hash`).
+- **Last Known Good Data**: Preserves valid match data during temporary network errors and flags responses as `data_status: "stale"`.
+- **Active Players & Innings Tracking**: Extracts all batting rows, `current_batsmen`, `current_bowler`, and `innings` details.
+- **Real-Time Change Detector**: `GET /match/{id}/changes` detects new deliveries, boundaries, wickets, and score updates.
+- **Swagger Documentation**: Self-hosted UI at `/docs`.
 
-## Requirements and Features 📑
+---
 
-- Python 3
-- install Required Modules
-- Fastapi: **<https://fastapi.tiangolo.com/>**
-- Virtual Environment for Running FastAPI framework
-- CORS Header and other Security Headers
-- Swagger Docs Support
-- Self-hosting support with gunicorn
-- Support Nginx, Apache2, Lightspeed or Cloudflare Tunnel Proxy
-- HTTPS (For Secure SSL Connections)  
+## Project Structure
 
-## Setup and Development
+```text
+live-cricket-score-api/
+│
+├── app.py                      # FastAPI App Routing & Middleware
+├── cli.py                      # CLI Tool
+├── requirements.txt            # Package Dependencies
+├── run.py                      # Server Launcher
+│
+├── scraper/                    # Web Scraper Layer
+│   ├── client.py               # Async HTTP Client (httpx, retries)
+│   ├── selectors.py            # Centralized Selectors with Fallbacks
+│   ├── parser_utils.py         # Safe text/type parsers & team extractor
+│   ├── event_parser.py         # Delivery event classifier & dismissal parser
+│   ├── matches.py              # Live & Upcoming match discovery scraper
+│   ├── match.py                # Match overview scraper
+│   ├── scorecard.py            # Scorecard scraper
+│   └── commentary.py           # Ball-by-ball commentary scraper
+│
+├── models/                     # Normalized Pydantic Models
+│   ├── match.py                # MatchInfo, LiveMatchesResponse, ScorecardResponse, FullMatchResponse
+│   ├── score.py                # ScoreInfo
+│   ├── player.py               # Batsman & Bowler models
+│   ├── commentary.py           # CommentaryItem, ChangeDetectionResult
+│   └── health.py               # HealthStatusResponse
+│
+├── services/                   # Business Logic & Service Layer
+│   ├── cache.py                # Short-TTL in-memory cache
+│   ├── change_detector.py      # Delivery deduplication & change detector
+│   └── match_service.py        # Service orchestrator & Last Known Good Data
+│
+└── tests/                      # Automated Unit Tests
+    ├── fixtures/               # HTML Test Fixtures
+    ├── test_parser.py
+    ├── test_event_parser.py
+    └── test_change_detector.py
+```
+
+---
+
+## REST API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | API status metadata |
+| `GET` | `/health` | Dynamic scraper health status |
+| `GET` | `/matches/live` | Currently live matches |
+| `GET` | `/matches/upcoming` | Scheduled match previews |
+| `GET` | `/match/{id}` | High-level match overview |
+| `GET` | `/match/{id}/scorecard` | Detailed match scorecard |
+| `GET` | `/match/{id}/commentary` | Ball-by-ball live commentary |
+| `GET` | `/match/{id}/recent` | Latest commentary event |
+| `GET` | `/match/{id}/full` | Combined match & commentary payload |
+| `GET` | `/match/{id}/changes` | Real-time delta & new delivery detector |
+
+---
+
+## Setup & Running
+
+### 1. Installation
 
 ```sh
-
-## install python env
-sudo apt install python3 python3-venv
-pip install gunicorn
-
-## Clone the Repo
+# Clone repository
 git clone https://github.com/mskian/live-cricket-score-api
 cd live-cricket-score-api
 
-## Create Virtual Env
-python3 -m venv venv
+# Create & activate virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: .\venv\Scripts\activate
 
-## Activate Virtual Env
-source venv/bin/activate
-
-## install Modules
-pip install fastapi uvicorn httpx beautifulsoup4 lxml gunicorn
-
-## start the dev server 
-uvicorn app:app --host 0.0.0.0 --port 6020
-
-## Exit virtual Env
-deactivate
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-## Production Server
+### 2. Start Development Server
 
 ```sh
-gunicorn -k uvicorn.workers.UvicornWorker app:app -b 0.0.0.0:6020 -w 2
+python run.py
+# or: uvicorn app:app --host 0.0.0.0 --port 6020
 ```
 
-## Systemd Conf
+### 3. Run Automated Tests
 
 ```sh
-[Unit]
-Description=Gunicorn instance to serve Score API
-Requires=network.target
-After=network.target
-
-[Service]
-WorkingDirectory=/home/live-score-api
-Environment="PATH=/home/live-score-api/venv/bin"
-ExecStart=/home/live-score-api/venv/bin/gunicorn -k uvicorn.workers.UvicornWorker app:app -b 0.0.0.0:6020 -w 2
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
+python -m unittest discover -s tests
 ```
 
-## Usage
+---
 
-- JSON
+## CLI Usage
 
 ```sh
-http://localhost:6020/?score=150294
+# List live matches
+python cli.py --live
+
+# List upcoming matches
+python cli.py --upcoming
+
+# Fetch match overview
+python cli.py 163017
+
+# Fetch detailed scorecard
+python cli.py 163017 --scorecard
+
+# Fetch commentary feed
+python cli.py 163017 --commentary
+
+# Fetch latest event
+python cli.py 163017 --recent
+
+# Fetch full combined payload
+python cli.py 163017 --full
+
+# Detect real-time changes
+python cli.py 163017 --changes
 ```
 
-```json
-{
-  "status": "success",
-  "title": "Sri Lanka A vs New Zealand A, 1st unofficial ODI, New Zealand A tour of Sri Lanka, 2026",
-  "score": "NZA 86/4 (17)",
-  "current_batsmen": [
-    {
-      "name": "Simon Keene",
-      "score": "6(7)"
-    },
-    {
-      "name": "Muhammad Abbas",
-      "score": "10(29)"
-    }
-  ],
-  "current_bowler": {
-    "name": "Wanuja Sahan"
-  }
-}
-```
+---
 
-- Tree View
+## Vercel Deployment
 
-```sh
-http://localhost:6020/?score=150294&text=true
-```
+1. **Install Vercel CLI**:
+   ```sh
+   npm install -g vercel
+   ```
 
-```sh
-🏏 Live Score
-│
-├── Match    : Sri Lanka A vs New Zealand A, 1st unofficial ODI, New Zealand A tour of Sri Lanka, 2026
-├── Score    : NZA 86/4 (17)
-├── Bowler   : Wanuja Sahan
-├── Batsmen
-│   ├── Simon Keene : 6(7)
-│   ├── Muhammad Abbas : 10(29)
-```
+2. **Login to Vercel**:
+   ```sh
+   vercel login
+   ```
 
-- Swagger Docs
+3. **Deploy Preview**:
+   ```sh
+   vercel
+   ```
 
-```sh
-http://localhost:6020/docs
-```
+4. **Deploy Production**:
+   ```sh
+   vercel --prod
+   ```
 
-## CLI
+---
 
-```sh
-## Get score
-python cli.py --12345
+## Serverless Limitations
 
-## JSON View 
-python cli.py --12345 --json
+- **Request-Based Execution**: This backend runs as request-based serverless functions on Vercel. It is **not** a 24/7 background scraper process.
+- **In-Memory Cache & Change Detection**: In-memory caching and change detection on `GET /match/{id}/changes` operate on a best-effort basis per serverless container instance.
+- **VPS Portability**: The codebase preserves complete architecture separation (`app.py`, `services/`, `scraper/`), making it simple to deploy on a persistent VPS (using Uvicorn/Systemd) if continuous polling for live streams is needed later.
 
-## Tree view
-python3 cli.py 12345 --text
-```
+---
 
-## LICENSE
+## License
 
-MIT
+MIT License - see the [LICENSE](LICENSE) file for details.
