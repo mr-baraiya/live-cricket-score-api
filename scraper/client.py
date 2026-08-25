@@ -3,11 +3,13 @@ import logging
 from typing import Optional
 import httpx
 
-logger = logging.getLogger("cricbuzz.http_client")
+import os
+
+logger = logging.getLogger("cricket.http_client")
 
 
-class CricbuzzHTTPClient:
-    BASE_URL = "https://www.cricbuzz.com"
+class CricketHTTPClient:
+    BASE_URL = os.getenv("TARGET_BASE_URL", "https://www.cricbuzz.com")
 
     DEFAULT_HEADERS = {
         "User-Agent": (
@@ -15,8 +17,8 @@ class CricbuzzHTTPClient:
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/146.0.0.0 Safari/537.36"
         ),
-        "Referer": "https://www.cricbuzz.com/",
-        "Origin": "https://www.cricbuzz.com",
+        "Referer": f"{BASE_URL}/",
+        "Origin": BASE_URL,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Cache-Control": "no-cache",
@@ -53,9 +55,7 @@ class CricbuzzHTTPClient:
         raise RuntimeError("Unexpected error in HTTP client retry loop")
 
 
-import os
-
 timeout_env = float(os.getenv("SCRAPER_TIMEOUT", "10.0"))
 retries_env = int(os.getenv("SCRAPER_MAX_RETRIES", "2"))
 
-http_client = CricbuzzHTTPClient(timeout=timeout_env, max_retries=retries_env)
+http_client = CricketHTTPClient(timeout=timeout_env, max_retries=retries_env)

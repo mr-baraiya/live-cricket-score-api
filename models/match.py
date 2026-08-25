@@ -15,7 +15,9 @@ class MatchInfo(BaseModel):
     id: Optional[str] = None
     title: Optional[str] = None
     venue: Optional[str] = None
+    date: Optional[str] = None
     status: Optional[str] = None
+    status_text: Optional[str] = None
     teams: List[str] = Field(default_factory=list)
 
 
@@ -24,6 +26,9 @@ class LiveMatchItem(BaseModel):
     title: str
     teams: List[str] = Field(default_factory=list)
     status: str
+    status_text: Optional[str] = None
+    date: Optional[str] = None
+    venue: Optional[str] = None
     url: Optional[str] = None
 
 
@@ -36,6 +41,8 @@ class UpcomingMatchItem(BaseModel):
     id: str
     title: str
     teams: List[str] = Field(default_factory=list)
+    status: str = "UPCOMING"
+    status_text: Optional[str] = None
     date: Optional[str] = None
     venue: Optional[str] = None
 
@@ -47,7 +54,7 @@ class UpcomingMatchesResponse(BaseModel):
 
 class MatchOverviewResponse(BaseModel):
     status: str = "success"
-    data_status: str = "fresh"  # "fresh", "stale", "error"
+    data_status: str = "fresh"  # "fresh", "stale", "partial"
     match: MatchInfo
     score: Optional[ScoreInfo] = None
     innings: Optional[InningsInfo] = None
@@ -55,6 +62,7 @@ class MatchOverviewResponse(BaseModel):
 
 class ScorecardResponse(BaseModel):
     status: str = "success"
+    data_status: str = "fresh"
     batsmen: List[Batsman] = Field(default_factory=list)
     current_batsmen: List[Batsman] = Field(default_factory=list)
     bowlers: List[Bowler] = Field(default_factory=list)
@@ -71,7 +79,7 @@ class ScorecardResponse(BaseModel):
 
 class FullMatchResponse(BaseModel):
     status: str = "success"
-    data_status: str = "fresh"
+    data_status: str = "fresh"  # "fresh", "stale", "partial"
     match: MatchInfo
     score: Optional[ScoreInfo] = None
     innings: Optional[InningsInfo] = None

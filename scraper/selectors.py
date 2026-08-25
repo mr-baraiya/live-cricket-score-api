@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from bs4 import BeautifulSoup, Tag
 
-logger = logging.getLogger("cricbuzz.selectors")
+logger = logging.getLogger("cricket.selectors")
 
 # Centralized Selector Dictionary with Primary & Fallback Selectors
 SELECTORS: Dict[str, List[Dict[str, Any]]] = {

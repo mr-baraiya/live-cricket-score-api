@@ -2,12 +2,12 @@ import logging
 from typing import Dict, Any, Optional
 from models.commentary import ChangeDetectionResult, CommentaryItem
 
-logger = logging.getLogger("cricbuzz.change_detector")
+logger = logging.getLogger("cricket.change_detector")
 
 
 class ChangeDetector:
     def __init__(self):
-        # Store state per match_id: {"last_event_id": str, "runs": int, "wickets": int}
+        # Store state per match_id: {"last_event_id": str, "runs": int, "wickets": int, "status": str}
         self._history: Dict[str, Dict[str, Any]] = {}
 
     def detect_changes(
@@ -19,6 +19,8 @@ class ChangeDetector:
         if match_id not in self._history:
             self._history[match_id] = {
                 "last_event_id": latest_commentary.event_id if latest_commentary else None,
+                "score": current_data.get("score"),
+                "status": current_data.get("status"),
             }
             return ChangeDetectionResult(
                 changed=False,

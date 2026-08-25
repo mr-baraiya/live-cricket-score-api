@@ -1,16 +1,16 @@
 # Live Cricket Score & Commentary API
 
-A clean, modular Python FastAPI project that scrapes publicly accessible Cricbuzz pages and exposes normalized JSON APIs for live match tracking, scorecards, ball-by-ball commentary, and change detection.
+A clean, modular Python FastAPI project that fetches publicly accessible live cricket pages and exposes normalized JSON APIs for live match tracking, scorecards, ball-by-ball commentary, and change detection.
 
 ---
 
 ## Disclaimer & Legal Usage Note
 
-- **Not an official API provided by Cricbuzz.**
-- This project retrieves data by scraping publicly available web content from Cricbuzz and is **not affiliated with, authorized, sponsored, or endorsed by Cricbuzz**.
+- **Not an official API provided by any sports organisation.**
+- This project retrieves data by scraping publicly available web content and is **not affiliated with, authorized, sponsored, or endorsed by any official sports organisation or third party**.
 - This project is created **for development, learning, and personal experimentation purposes only**.
-- While this scraper source code itself is licensed under the MIT License, the underlying Cricbuzz match data, team names, trademarks, and commentary text remain the property of their respective owners and are **not licensed for public or commercial redistribution**.
-- All credits go to **[Cricbuzz](https://www.cricbuzz.com/)**.
+- While this scraper source code itself is licensed under the MIT License, the underlying match data, team names, trademarks, and commentary text remain the property of their respective owners and are **not licensed for public or commercial redistribution**.
+- All data credits belong to their respective owners.
 
 ---
 
