@@ -26,6 +26,7 @@ from services import match_service
 from services.websocket_manager import websocket_manager
 from services.live_updater import live_updater
 from services import player_image_service
+from services import stadium_image_service
 from services import team_logo_service
 
 logging.basicConfig(level=logging.INFO)
@@ -102,6 +103,8 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from fastapi.staticfiles import StaticFiles
+
 cors_origins_env = os.getenv("CORS_ORIGINS", "*")
 allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
@@ -112,6 +115,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.middleware("http")
@@ -431,6 +438,43 @@ async def upload_player_photo(
         }
     except Exception as exc:
         raise APIError(400, "UPLOAD_FAILED", str(exc))
+
+
+@app.get("/stadium/background")
+async def get_stadium_background():
+    data = stadium_image_service.get_stadium_background()
+    return {"status": "success", "stadium": data}
+
+
+@app.post("/stadium/upload")
+async def upload_stadium_photo(
+    file: UploadFile = File(...),
+    overlay_opacity: float = Form(0.55),
+    blur: int = Form(4)
+):
+    try:
+        contents = await file.read()
+        blob_url = stadium_image_service.upload_stadium_photo(contents, overlay_opacity, blur)
+        stadium_info = stadium_image_service.get_stadium_background()
+        
+        # Broadcast stadium update to all active live match clients
+        for mid in list(websocket_manager._active_connections.keys()):
+            try:
+                await websocket_manager.broadcast_to_match(mid, {
+                    "type": "stadium_background_updated",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "stadium": stadium_info
+                })
+            except Exception as b_err:
+                logger.warning("Error broadcasting stadium update for %s: %s", mid, b_err)
+        
+        return {
+            "status": "success",
+            "blob_url": blob_url,
+            "stadium": stadium_info
+        }
+    except Exception as exc:
+        raise APIError(400, "STADIUM_UPLOAD_FAILED", str(exc))
 
 
 @app.post("/team/logo/upload")

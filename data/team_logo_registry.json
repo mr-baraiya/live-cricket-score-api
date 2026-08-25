@@ -8,5 +8,15 @@
     "name": "IND",
     "filename": "team_logos/ind.webp",
     "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/team_logos/ind-rwBhq1oyBGvgWo7iCoD9C9OiPyqRfO.webp"
+  },
+  "india": {
+    "name": "India",
+    "filename": "team_logos/india.webp",
+    "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/team_logos/india-irZyEyKvBnAN4mx80MHvTY9BeZ1BdS.webp"
+  },
+  "sri_lanka": {
+    "name": "Sri Lanka",
+    "filename": "team_logos/sri_lanka.webp",
+    "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/team_logos/sri_lanka-VkCquBKg0Df1x0GaCD7li1FHIJwot0.webp"
   }
 }
