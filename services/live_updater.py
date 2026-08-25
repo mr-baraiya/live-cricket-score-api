@@ -76,12 +76,14 @@ class BackgroundLiveUpdater:
                         changes_res = await match_service.detect_match_changes(mid)
 
                         if changes_res.changed:
+                            from app import _match_control_store
                             payload = {
                                 "type": "match_update",
                                 "match_id": mid,
                                 "updated_at": datetime.now(timezone.utc).isoformat(),
                                 "changes": changes_res.details,
                                 "data": full_match.model_dump(),
+                                "control": _match_control_store.get(mid, None)
                             }
                             await websocket_manager.broadcast_to_match(mid, payload)
                     except Exception as exc:

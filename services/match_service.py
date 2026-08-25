@@ -19,6 +19,8 @@ from models.match import (
 from models.commentary import CommentaryResponse, RecentEventResponse, ChangeDetectionResult
 from models.health import HealthStatusResponse
 
+from services import player_image_service
+
 logger = logging.getLogger("cricket.match_service")
 
 
@@ -133,6 +135,16 @@ class MatchService:
                 res = await MatchOverviewScraper.scrape_match_overview(match_id)
                 if res and res.match and res.match.title:
                     res.data_status = "fresh"
+
+                    # Enrich active batsmen & bowler images with Vercel Blob CDN URLs
+                    if res.score:
+                        if hasattr(res.score, "batsman1") and getattr(res.score, "batsman1", None) and getattr(res.score.batsman1, "name", None):
+                            res.score.batsman1.image = player_image_service.get_or_fetch_player_blob_url(res.score.batsman1.name)
+                        if hasattr(res.score, "batsman2") and getattr(res.score, "batsman2", None) and getattr(res.score.batsman2, "name", None):
+                            res.score.batsman2.image = player_image_service.get_or_fetch_player_blob_url(res.score.batsman2.name)
+                        if hasattr(res.score, "bowler") and getattr(res.score, "bowler", None) and getattr(res.score.bowler, "name", None):
+                            res.score.bowler.image = player_image_service.get_or_fetch_player_blob_url(res.score.bowler.name)
+
                     self._last_good_overview[match_id] = res
                     match_cache.set(cache_key, res)
                     self.last_successful_dt = datetime.now(timezone.utc)
@@ -166,6 +178,22 @@ class MatchService:
             try:
                 res = await ScorecardScraper.scrape_scorecard(match_id)
                 res.data_status = "fresh"
+
+                if res.batsmen:
+                    for b in res.batsmen:
+                        if b and getattr(b, "name", None):
+                            b.image = player_image_service.get_or_fetch_player_blob_url(b.name)
+                if res.current_batsmen:
+                    for cb in res.current_batsmen:
+                        if cb and getattr(cb, "name", None):
+                            cb.image = player_image_service.get_or_fetch_player_blob_url(cb.name)
+                if res.bowlers:
+                    for bw in res.bowlers:
+                        if bw and getattr(bw, "name", None):
+                            bw.image = player_image_service.get_or_fetch_player_blob_url(bw.name)
+                if res.current_bowler and getattr(res.current_bowler, "name", None):
+                    res.current_bowler.image = player_image_service.get_or_fetch_player_blob_url(res.current_bowler.name)
+
                 self._last_good_scorecard[match_id] = res
                 match_cache.set(cache_key, res)
                 self.last_successful_dt = datetime.now(timezone.utc)

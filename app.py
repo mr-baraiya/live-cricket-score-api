@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 import httpx
-from fastapi import FastAPI, Request, Path, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Path, Body, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -25,6 +25,8 @@ from models import (
 from services import match_service
 from services.websocket_manager import websocket_manager
 from services.live_updater import live_updater
+from services import player_image_service
+from services import team_logo_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("cricket.api")
@@ -105,15 +107,17 @@ allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
+    if request.scope.get("type") != "http" or request.url.path.startswith("/ws"):
+        return await call_next(request)
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -277,6 +281,43 @@ async def get_match_changes(id: str = Path(..., min_length=4, max_length=20)):
         raise APIError(503, "SCRAPER_UNAVAILABLE", "Upstream data source temporarily unavailable")
 
 
+_match_control_store = {}
+
+
+@app.get("/match/{id}/control")
+async def get_match_control(id: str = Path(..., min_length=4, max_length=20)):
+    _validate_id(id)
+    ctrl = _match_control_store.get(id, {
+        "showScoreboard": True,
+        "showPlayers": True,
+        "showRecentBalls": True,
+        "showCommentary": True,
+        "showVenue": True,
+        "layout": "DEFAULT"
+    })
+    logger.info("[CTRL GET] match_id=%s control=%s", id, ctrl)
+    return {
+        "status": "success",
+        "match_id": id,
+        "control": ctrl
+    }
+
+
+@app.post("/match/{id}/control")
+async def update_match_control(id: str = Path(..., min_length=4, max_length=20), control_data: dict = Body(...)):
+    _validate_id(id)
+    _match_control_store[id] = control_data
+    client_count = websocket_manager.get_active_client_count(id)
+    logger.info("[CTRL POST] match_id=%s data=%s broadcasting to %d active WS clients", id, control_data, client_count)
+    await websocket_manager.broadcast_to_match(id, {
+        "type": "broadcast_state",
+        "match_id": id,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "data": control_data
+    })
+    return {"status": "success", "match_id": id, "control": control_data}
+
+
 @app.websocket("/ws/match/{id}")
 async def match_websocket(websocket: WebSocket, id: str):
     try:
@@ -286,25 +327,155 @@ async def match_websocket(websocket: WebSocket, id: str):
         return
 
     await websocket_manager.connect(id, websocket)
+    logger.info("[WS CONNECT] match_id=%s total_clients=%d", id, websocket_manager.get_active_client_count(id))
 
-    # Immediately deliver current cached snapshot upon connection
+    # Deliver current cached snapshot if available (non-blocking for WS connection)
     try:
         snapshot = await match_service.get_cached_match_state(id)
+        current_ctrl = _match_control_store.get(id, {
+            "showScoreboard": True,
+            "showPlayers": True,
+            "showRecentBalls": True,
+            "showCommentary": True,
+            "showVenue": True,
+            "layout": "DEFAULT"
+        })
+        logger.info("[WS SNAPSHOT] Sending initial snapshot & control to new WS client for match %s: ctrl=%s", id, current_ctrl)
         await websocket.send_json({
             "type": "match_snapshot",
             "match_id": id,
             "updated_at": datetime.now(timezone.utc).isoformat(),
-            "data": snapshot.model_dump()
+            "data": snapshot.model_dump(),
+            "control": current_ctrl
         })
+    except Exception as snap_err:
+        logger.warning("Could not send initial snapshot for match %s: %s", id, snap_err)
+        try:
+            await websocket.send_json({
+                "type": "broadcast_state",
+                "match_id": id,
+                "data": _match_control_store.get(id, {})
+            })
+        except Exception:
+            pass
 
+    try:
         while True:
-            # Maintain active connection and receive optional client heartbeats
-            await websocket.receive_text()
+            text = await websocket.receive_text()
+            if text:
+                try:
+                    payload = json.loads(text)
+                    logger.info("[WS RECV] match_id=%s payload_type=%s", id, payload.get("type"))
+                    if payload.get("type") == "broadcast_state":
+                        c_data = payload.get("data", {})
+                        _match_control_store[id] = c_data
+                        client_count = websocket_manager.get_active_client_count(id)
+                        logger.info("[WS BROADCAST] match_id=%s data=%s clients=%d", id, c_data, client_count)
+                        await websocket_manager.broadcast_to_match(id, {
+                            "type": "broadcast_state",
+                            "match_id": id,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                            "data": c_data
+                        })
+                except Exception as parse_err:
+                    logger.warning("[WS PARSE ERR] match_id=%s err=%s", id, parse_err)
     except WebSocketDisconnect:
         await websocket_manager.disconnect(id, websocket)
+        logger.info("[WS DISCONNECT] match_id=%s remaining=%d", id, websocket_manager.get_active_client_count(id))
     except Exception as exc:
         logger.warning("WebSocket connection exception for match %s: %s", id, exc)
         await websocket_manager.disconnect(id, websocket)
+
+
+@app.get("/player/image/{player_name}")
+async def get_player_image(player_name: str):
+    blob_url = player_image_service.get_or_fetch_player_blob_url(player_name)
+    return {"status": "success", "player_name": player_name, "blob_url": blob_url}
+
+
+@app.get("/players/registry")
+async def get_players_registry():
+    registry = player_image_service.load_registry()
+    return {"status": "success", "registry": registry}
+
+
+@app.post("/player/upload")
+async def upload_player_photo(
+    player_name: str = Form(...),
+    role_key: Optional[str] = Form(None),
+    file: UploadFile = File(...)
+):
+    try:
+        contents = await file.read()
+        blob_url = player_image_service.upload_custom_player_photo(player_name, contents, role_key=role_key)
+        from services.cache import match_cache
+        match_cache.clear()
+        
+        # Broadcast update to connected match clients
+        for mid in list(websocket_manager._active_connections.keys()):
+            try:
+                full_match = await match_service.get_full_match(mid)
+                await websocket_manager.broadcast_to_match(mid, {
+                    "type": "media_update",
+                    "match_id": mid,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "data": full_match.model_dump()
+                })
+            except Exception as e:
+                logger.warning("Error broadcasting media_update for match %s: %s", mid, e)
+
+        return {
+            "status": "success",
+            "player_name": player_name,
+            "blob_url": blob_url
+        }
+    except Exception as exc:
+        raise APIError(400, "UPLOAD_FAILED", str(exc))
+
+
+@app.post("/team/logo/upload")
+async def upload_team_logo(
+    team_name: str = Form(...),
+    file: UploadFile = File(...)
+):
+    try:
+        contents = await file.read()
+        blob_url = team_logo_service.upload_team_logo(team_name, contents)
+        from services.cache import match_cache
+        match_cache.clear()
+
+        # Broadcast update to connected match clients
+        for mid in list(websocket_manager._active_connections.keys()):
+            try:
+                full_match = await match_service.get_full_match(mid)
+                await websocket_manager.broadcast_to_match(mid, {
+                    "type": "media_update",
+                    "match_id": mid,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "data": full_match.model_dump()
+                })
+            except Exception as e:
+                logger.warning("Error broadcasting media_update for match %s: %s", mid, e)
+
+        return {
+            "status": "success",
+            "team_name": team_name,
+            "blob_url": blob_url
+        }
+    except Exception as exc:
+        raise APIError(400, "UPLOAD_FAILED", str(exc))
+
+
+@app.get("/team/logos/registry")
+async def get_team_logos_registry():
+    registry = team_logo_service.load_logo_registry()
+    return {"status": "success", "registry": registry}
+
+
+@app.get("/team/logo/{team_name}")
+async def get_team_logo(team_name: str):
+    blob_url = team_logo_service.get_team_logo_url(team_name)
+    return {"status": "success", "team_name": team_name, "blob_url": blob_url}
 
 
 @app.exception_handler(APIError)

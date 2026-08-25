@@ -21,6 +21,9 @@ class SimpleCache:
     def set(self, key: str, value: Any):
         self._store[key] = (time.time(), value)
 
+    def clear(self):
+        self._store.clear()
+
     def get_lock(self, key: str) -> asyncio.Lock:
         if key not in self._locks:
             self._locks[key] = asyncio.Lock()

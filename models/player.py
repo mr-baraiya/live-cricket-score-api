@@ -11,6 +11,7 @@ class Batsman(BaseModel):
     strike_rate: Optional[float] = Field(default=None, ge=0.0)
     dismissal: Optional[str] = None
     active: bool = False
+    image: Optional[str] = None
 
 
 class Bowler(BaseModel):
@@ -20,3 +21,4 @@ class Bowler(BaseModel):
     runs: Optional[int] = Field(default=None, ge=0)
     wickets: Optional[int] = Field(default=None, ge=0, le=10)
     economy: Optional[float] = Field(default=None, ge=0.0)
+    image: Optional[str] = None
