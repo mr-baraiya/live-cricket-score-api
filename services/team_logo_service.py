@@ -42,8 +42,8 @@ def load_logo_registry() -> dict:
 
 
 def save_logo_registry(registry: dict):
-    os.makedirs(os.path.dirname(REGISTRY_PATH), exist_ok=True)
     try:
+        os.makedirs(os.path.dirname(REGISTRY_PATH), exist_ok=True)
         with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, ensure_ascii=False)
     except Exception as e:
@@ -163,8 +163,8 @@ def load_stadium_registry() -> dict:
 
 
 def save_stadium_registry(registry: dict):
-    os.makedirs(os.path.dirname(STADIUM_REGISTRY_PATH), exist_ok=True)
     try:
+        os.makedirs(os.path.dirname(STADIUM_REGISTRY_PATH), exist_ok=True)
         with open(STADIUM_REGISTRY_PATH, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, ensure_ascii=False)
     except Exception as e:

@@ -33,12 +33,13 @@ def load_stadium_data() -> dict:
 
 
 def save_stadium_data(data: dict):
-    os.makedirs(os.path.dirname(STADIUM_DATA_PATH), exist_ok=True)
     try:
+        os.makedirs(os.path.dirname(STADIUM_DATA_PATH), exist_ok=True)
         with open(STADIUM_DATA_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Error saving stadium background data: {e}")
+
 
 
 def resize_stadium_image(image_bytes: bytes) -> bytes:
@@ -97,10 +98,13 @@ def upload_stadium_photo(file_bytes: bytes, overlay_opacity: float = 0.55, blur:
 
     # 2. Local Static File Storage Fallback
     static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
-    os.makedirs(static_dir, exist_ok=True)
-    local_file_path = os.path.join(static_dir, "stadium_background.webp")
-    with open(local_file_path, "wb") as f:
-        f.write(processed_webp)
+    try:
+        os.makedirs(static_dir, exist_ok=True)
+        local_file_path = os.path.join(static_dir, "stadium_background.webp")
+        with open(local_file_path, "wb") as f:
+            f.write(processed_webp)
+    except Exception as e:
+        logger.warning(f"Could not save static stadium background locally: {e}")
 
     local_url = "http://localhost:6020/static/stadium_background.webp"
     stadium_info = {

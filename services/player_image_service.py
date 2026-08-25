@@ -54,8 +54,8 @@ def load_registry() -> dict:
 
 
 def save_registry(registry: dict):
-    os.makedirs(os.path.dirname(REGISTRY_PATH), exist_ok=True)
     try:
+        os.makedirs(os.path.dirname(REGISTRY_PATH), exist_ok=True)
         with open(REGISTRY_PATH, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, ensure_ascii=False)
     except Exception as e:
