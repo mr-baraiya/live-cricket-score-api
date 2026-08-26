@@ -68,8 +68,8 @@
   "ravindra_jadeja": {
     "name": "Ravindra Jadeja",
     "filename": "ravindra_jadeja.webp",
-    "source_url": "https://upload.wikimedia.org/wikipedia/commons/2/2c/PM_Shri_Narendra_Modi_with_Ravindra_Jadeja_%28Cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail_unscaled",
-    "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/ravindra_jadeja-nkc99HhZsWhcPPVpRPjKhiOVc4Xzti.webp"
+    "source_url": "Control Panel Upload",
+    "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/ravindra_jadeja-uJt9DX0KSjIe26LTd5rQqbtMBvLRnY.webp"
   },
   "jasprit_bumrah": {
     "name": "Jasprit Bumrah",
@@ -298,5 +298,17 @@
     "filename": "nonstriker.webp",
     "source_url": "Control Panel Upload",
     "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/nonstriker-1IU6SOe4cDNfvQG1wWQZm0duwjMWJ4.webp"
+  },
+  "saransh_jain": {
+    "name": "Saransh Jain",
+    "filename": "saransh_jain.webp",
+    "source_url": "Control Panel Upload",
+    "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/saransh_jain-ajrkqBhjYcCYwZzrLqtLiqHWZU74xU.webp"
+  },
+  "bowler": {
+    "name": "Ravindra Jadeja",
+    "filename": "ravindra_jadeja.webp",
+    "source_url": "Control Panel Upload",
+    "blob_url": "https://9qtt6al5ofxx7kcu.public.blob.vercel-storage.com/ravindra_jadeja-uJt9DX0KSjIe26LTd5rQqbtMBvLRnY.webp"
   }
 }
