@@ -69,25 +69,12 @@ def clean_team_name(name: str) -> str:
     if not name:
         return ""
     cleaned = name.strip()
-
-    # Remove paren stats e.g. (Kamindu Mendis 10(26)...)
-    cleaned = re.sub(r"\(.*?\)", "", cleaned)
+    cleaned = re.sub(r"\(.*", "", cleaned).strip()
     if "|" in cleaned:
-        cleaned = cleaned.split("|")[0]
-
-    # Remove runs/wickets e.g. 503/9 d, 290 & 83/2 f/o
-    cleaned = re.sub(r"\b\d+\s*(?:&|\+)\s*\d+[-/]\d+\s*(?:d|f/o|a/o)?\b", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\b\d+[-/]\d+\s*(?:d|f/o|a/o)?\b", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\b\d+\s*d\b", "", cleaned, flags=re.IGNORECASE)
-
-    if "-" in cleaned:
-        parts = cleaned.split("-")
-        suffix = parts[-1].strip().lower()
-        if any(k in suffix for k in ["won", "lost", "stumps", "live", "completed", "delay", "rain", "day", "f/o"]):
-            cleaned = "-".join(parts[:-1]).strip()
-
-    cleaned = re.sub(r"\s+(won|lost|by\s+\d+.*|stumps|f/o|d)$", "", cleaned, flags=re.IGNORECASE)
-    return " ".join(cleaned.split()).strip()
+        cleaned = cleaned.split("|")[0].strip()
+    cleaned = re.sub(r"\d+.*", "", cleaned).strip()
+    cleaned = re.sub(r"[-:]+$", "", cleaned).strip()
+    return cleaned
 
 
 def extract_teams_from_title(title: Optional[str]) -> List[str]:
