@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 from typing import Optional
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from fastapi import FastAPI, Request, Path, Body, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import JSONResponse, HTMLResponse
+
 from pydantic import BaseModel, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -195,6 +197,17 @@ async def get_upcoming_matches():
         raise APIError(502, "UPSTREAM_ERROR", "Failed to fetch upcoming matches")
 
 
+@app.get("/matches/recent", response_model=LiveMatchesResponse)
+async def get_recent_matches():
+    try:
+        return await match_service.get_recent_matches()
+    except (httpx.TimeoutException, httpx.NetworkError):
+        raise APIError(503, "SCRAPER_UNAVAILABLE", "Upstream data source temporarily unavailable")
+    except Exception as exc:
+        logger.error("Error in /matches/recent: %s", exc)
+        raise APIError(502, "UPSTREAM_ERROR", "Failed to fetch recent matches")
+
+
 def _validate_id(match_id: str):
     try:
         MatchValidator(score=match_id)
@@ -332,14 +345,17 @@ async def update_match_control(id: str = Path(..., min_length=4, max_length=20),
 
 @app.websocket("/ws/match/{id}")
 async def match_websocket(websocket: WebSocket, id: str):
-    try:
-        MatchValidator(score=id)
-    except Exception:
-        await websocket.close(code=4000, reason="Invalid match ID")
-        return
-
     await websocket_manager.connect(id, websocket)
     logger.info("[WS CONNECT] match_id=%s total_clients=%d", id, websocket_manager.get_active_client_count(id))
+
+    try:
+        MatchValidator(score=id)
+    except Exception as val_err:
+        logger.warning("[WS INVALID ID] match_id=%s err=%s", id, val_err)
+        await websocket.close(code=4000, reason="Invalid match ID")
+        await websocket_manager.disconnect(id, websocket)
+        return
+
 
     # Deliver current cached snapshot if available (non-blocking for WS connection)
     try:
@@ -531,7 +547,8 @@ async def get_team_logo(team_name: str):
 async def api_error_handler(request: Request, exc: APIError):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"status": "error", "error": {"code": exc.code, "message": exc.message}}
+        content={"status": "error", "error": {"code": exc.code, "message": exc.message}},
+        headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
     )
 
 
@@ -539,7 +556,8 @@ async def api_error_handler(request: Request, exc: APIError):
 async def http_error_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"status": "error", "error": {"code": "NOT_FOUND", "message": exc.detail or "invalid api route"}}
+        content={"status": "error", "error": {"code": "NOT_FOUND", "message": exc.detail or "invalid api route"}},
+        headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
     )
 
 
@@ -548,5 +566,6 @@ async def global_error_handler(request: Request, exc: Exception):
     logger.error("Unhandled exception in API route: %s", exc, exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"status": "error", "error": {"code": "INTERNAL_SERVER_ERROR", "message": "internal server error"}}
+        content={"status": "error", "error": {"code": "INTERNAL_SERVER_ERROR", "message": "internal server error"}},
+        headers={"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*"}
     )

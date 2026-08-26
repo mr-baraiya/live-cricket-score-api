@@ -12,10 +12,11 @@ from .parser_utils import (
     build_clean_title,
     deduplicate_repeated_text,
 )
-from .normalizer import normalize_status
 from services.cricket_math import calculate_run_rate, validate_runs, validate_wickets
-from models.match import MatchInfo, MatchOverviewResponse
+
 from models.score import ScoreInfo
+from models.match import MatchInfo, MatchOverviewResponse
+from .normalizer import normalize_status
 
 logger = logging.getLogger("cricket.match_scraper")
 
@@ -52,6 +53,13 @@ class MatchOverviewScraper:
             venue = clean_text(venue_tag.get_text(" ", strip=True))
             venue = deduplicate_repeated_text(venue)
 
+        if not venue:
+            full_text = soup.get_text(" ", strip=True)
+            v_match = re.search(r"\bVenue\s*:\s*([^•\n\r|]+)", full_text, re.IGNORECASE)
+            if v_match:
+                venue = clean_text(v_match.group(1).strip())
+                venue = deduplicate_repeated_text(venue)
+
         # 4. Date Extraction
         date_str = None
         for meta_item in soup.find_all("meta"):
@@ -86,6 +94,7 @@ class MatchOverviewScraper:
         status_enum, clean_status_text = normalize_status(raw_status_text)
 
         # 6. Score Extraction
+        raw_text = soup.get_text()
         og_tag = soup.find("meta", property="og:title")
         og_title = og_tag.get("content", "") if og_tag else ""
 
@@ -94,15 +103,29 @@ class MatchOverviewScraper:
         wickets = None
         overs = None
 
-        s_match = re.search(
-            r"([A-Za-z0-9\s]+?)\s+(\d+)/(\d+)\s*\(([\d.]+)\)",
-            og_title
-        )
+        # 1st attempt: Parse from raw_text: e.g. SL290&77/2(19.1) or SL 77/2 (19.1)
+        s_match = re.search(r"([A-Za-z]+)\s*(?:\d+\s*&\s*)?(\d+)/(\d+)\s*\(([\d.]+)\)", raw_text)
         if s_match:
-            team_abbr = s_match.group(1).strip()
+            raw_t = s_match.group(1)
+            team_abbr = re.sub(r"^[a-z]+", "", raw_t).strip() or raw_t
             runs = validate_runs(safe_int(s_match.group(2)))
             wickets = validate_wickets(safe_int(s_match.group(3)))
             overs = safe_float(s_match.group(4))
+
+        # 2nd attempt: og:title fallback
+        if runs is None and og_title:
+            og_match = re.search(r"([A-Za-z0-9]+)\s+(?:(\d+)\s*&\s*)?(\d+)/(\d+)", og_title)
+            if og_match:
+                team_abbr = og_match.group(1).strip()
+                runs = validate_runs(safe_int(og_match.group(3)))
+                wickets = validate_wickets(safe_int(og_match.group(4)))
+
+        # 3rd attempt: overs fallback search
+        if overs is None:
+            ov_match = re.search(r"\(([\d.]+)\)\s*f/o|\(([\d.]+)\s*ov|\b(\d{1,3}\.[1-6])\b", raw_text)
+            if ov_match:
+                ov_str = ov_match.group(1) or ov_match.group(2) or ov_match.group(3)
+                overs = safe_float(ov_str)
 
         run_rate = calculate_run_rate(runs, overs)
         if run_rate is None:

@@ -1,11 +1,8 @@
+import asyncio
 import logging
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
-from scraper.matches import MatchesScraper
-from scraper.match import MatchOverviewScraper
-from scraper.scorecard import ScorecardScraper
-from scraper.commentary import CommentaryScraper
 from .cache import match_cache
 from .change_detector import change_detector
 from models.match import (
@@ -84,7 +81,64 @@ class MatchService:
                 return cached
 
             try:
+                from scraper.matches import MatchesScraper
+                from scraper.match import MatchOverviewScraper
+                from scraper.normalizer import MatchStatusEnum
+
                 res = await MatchesScraper.scrape_live_matches()
+
+                # Dynamically fetch real scraped status, venue, status_text, and live score for each match
+                async def enrich_live_match(m):
+                    try:
+                        ov = await MatchOverviewScraper.scrape_match_overview(m.id)
+                        if ov and ov.match:
+                            m.status = ov.match.status
+                            if ov.match.status_text:
+                                m.status_text = ov.match.status_text
+                            if ov.match.venue:
+                                m.venue = ov.match.venue
+                            if ov.score:
+                                m.score = ov.score
+                            self._last_good_overview[m.id] = ov
+                        elif m.id in self._last_good_overview:
+                            ov = self._last_good_overview[m.id]
+                            if ov.match:
+                                m.status = ov.match.status
+                                if ov.match.status_text:
+                                    m.status_text = ov.match.status_text
+                                if ov.match.venue:
+                                    m.venue = ov.match.venue
+                            if ov.score:
+                                m.score = ov.score
+                    except Exception as e:
+                        logger.warning("Failed to fetch dynamic overview for live match %s: %s", m.id, e)
+
+                sem = asyncio.Semaphore(5)
+                async def safe_enrich_live(m):
+                    async with sem:
+                        await enrich_live_match(m)
+
+                if res.matches:
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.gather(*[safe_enrich_live(m) for m in res.matches[:8]], return_exceptions=True),
+                            timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Live overview enrichment timed out, serving listing cards")
+
+                    # STRICT FILTERING: Keep ONLY matches that are actually LIVE or currently in play
+                    valid_live = []
+                    for m in res.matches:
+                        st_text = (m.status_text or "").lower()
+                        is_completed = m.status == MatchStatusEnum.COMPLETED or "won by" in st_text or "won an" in st_text
+                        is_upcoming = m.status == MatchStatusEnum.UPCOMING or "match starts" in st_text or "scheduled" in st_text
+                        
+                        if not is_completed and not is_upcoming:
+                            valid_live.append(m)
+
+                    res.matches = valid_live
+
                 match_cache.set(cache_key, res)
                 self.last_successful_dt = datetime.now(timezone.utc)
                 self.last_successful_scrape = self.last_successful_dt.isoformat()
@@ -108,7 +162,49 @@ class MatchService:
                 return cached
 
             try:
+                from scraper.matches import MatchesScraper
+                from scraper.match import MatchOverviewScraper
+                from scraper.normalizer import MatchStatusEnum
+
                 res = await MatchesScraper.scrape_upcoming_matches()
+
+                async def enrich_upcoming_match(m):
+                    try:
+                        ov = await MatchOverviewScraper.scrape_match_overview(m.id)
+                        if ov and ov.match:
+                            m.status = ov.match.status
+                            if ov.match.status_text:
+                                m.status_text = ov.match.status_text
+                            if ov.match.venue:
+                                m.venue = ov.match.venue
+                            self._last_good_overview[m.id] = ov
+                    except Exception:
+                        pass
+
+                sem = asyncio.Semaphore(5)
+                async def safe_enrich_upcoming(m):
+                    async with sem:
+                        await enrich_upcoming_match(m)
+
+                if res.matches:
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.gather(*[safe_enrich_upcoming(m) for m in res.matches[:8]], return_exceptions=True),
+                            timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Upcoming overview enrichment timed out, serving listing cards")
+
+                    valid_upcoming = []
+                    for m in res.matches:
+                        st_text = (m.status_text or "").lower()
+                        is_completed = m.status == MatchStatusEnum.COMPLETED or "won by" in st_text or "won an" in st_text
+                        is_live = m.status == MatchStatusEnum.LIVE or "trail by" in st_text or "lead by" in st_text or "day " in st_text
+                        if not is_completed and not is_live:
+                            valid_upcoming.append(m)
+
+                    res.matches = valid_upcoming
+
                 match_cache.set(cache_key, res)
                 self.last_successful_dt = datetime.now(timezone.utc)
                 self.last_successful_scrape = self.last_successful_dt.isoformat()
@@ -120,7 +216,70 @@ class MatchService:
                 self.last_error = str(exc)
                 raise exc
 
+    async def get_recent_matches(self) -> LiveMatchesResponse:
+        cache_key = "recent_matches"
+        cached = match_cache.get(cache_key)
+        if cached:
+            return cached
+
+        async with match_cache.get_lock(cache_key):
+            cached = match_cache.get(cache_key)
+            if cached:
+                return cached
+
+            try:
+                from scraper.matches import MatchesScraper
+                from scraper.match import MatchOverviewScraper
+                from scraper.normalizer import MatchStatusEnum
+
+                res = await MatchesScraper.scrape_live_matches()
+
+                async def enrich_recent_match(m):
+                    try:
+                        ov = await MatchOverviewScraper.scrape_match_overview(m.id)
+                        if ov and ov.match:
+                            m.status = ov.match.status
+                            if ov.match.status_text:
+                                m.status_text = ov.match.status_text
+                            if ov.match.venue:
+                                m.venue = ov.match.venue
+                            if ov.score:
+                                m.score = ov.score
+                            self._last_good_overview[m.id] = ov
+                    except Exception as e:
+                        logger.warning("Failed to fetch dynamic overview for recent match %s: %s", m.id, e)
+
+                sem = asyncio.Semaphore(6)
+                async def safe_enrich_recent(m):
+                    async with sem:
+                        await enrich_recent_match(m)
+
+                if res.matches:
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.gather(*[safe_enrich_recent(m) for m in res.matches[:8]], return_exceptions=True),
+                            timeout=12.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning("Recent overview enrichment timed out, serving listing cards")
+
+                    recent_only = []
+                    for m in res.matches:
+                        st_text = (m.status_text or "").lower()
+                        is_completed = m.status == MatchStatusEnum.COMPLETED or "won by" in st_text or "won an" in st_text
+                        if is_completed:
+                            recent_only.append(m)
+
+                    res.matches = recent_only
+
+                match_cache.set(cache_key, res)
+                return res
+            except Exception as exc:
+                logger.error("Failed to fetch recent matches: %s", exc)
+                raise exc
+
     async def get_match_overview(self, match_id: str) -> MatchOverviewResponse:
+        from scraper.match import MatchOverviewScraper
         cache_key = f"overview_{match_id}"
         cached = match_cache.get(cache_key)
         if cached:
@@ -165,6 +324,7 @@ class MatchService:
                 raise exc
 
     async def get_scorecard(self, match_id: str) -> ScorecardResponse:
+        from scraper.scorecard import ScorecardScraper
         cache_key = f"scorecard_{match_id}"
         cached = match_cache.get(cache_key)
         if cached:
@@ -212,6 +372,7 @@ class MatchService:
                 return ScorecardResponse(status="success", data_status="fresh", batsmen=[], bowlers=[])
 
     async def get_commentary(self, match_id: str) -> CommentaryResponse:
+        from scraper.commentary import CommentaryScraper
         cache_key = f"commentary_{match_id}"
         cached = match_cache.get(cache_key)
         if cached:

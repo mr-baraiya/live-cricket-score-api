@@ -30,6 +30,7 @@ class LiveMatchItem(BaseModel):
     date: Optional[str] = None
     venue: Optional[str] = None
     url: Optional[str] = None
+    score: Optional[ScoreInfo] = None
 
 
 class LiveMatchesResponse(BaseModel):

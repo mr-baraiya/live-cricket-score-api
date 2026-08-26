@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 
 
 class SimpleCache:
-    def __init__(self, ttl: float = 3.0):
+    def __init__(self, ttl: float = 10.0):
         self.ttl = ttl
         self._store: Dict[str, Tuple[float, Any]] = {}
         self._locks: Dict[str, asyncio.Lock] = {}

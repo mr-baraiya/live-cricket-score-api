@@ -40,10 +40,10 @@ class MatchesScraper:
                 clean_title = deduplicate_repeated_text(clean_title) or clean_title
                 teams = extract_teams_from_title(clean_title)
 
-                # Extract status text from surrounding card context
-                parent_txt = ""
-                if a.parent and a.parent.parent:
-                    parent_txt = clean_text(" ".join(a.parent.parent.get_text(" ", strip=True).split())) or ""
+                # Extract status text ONLY from immediate parent element
+                parent_txt = clean_text(" ".join(a.get_text(" ", strip=True).split())) or ""
+                if not parent_txt and a.parent:
+                    parent_txt = clean_text(" ".join(a.parent.get_text(" ", strip=True).split())) or ""
 
                 status_enum, clean_status_text = normalize_status(parent_txt or "Live")
 

@@ -72,10 +72,8 @@ class BackgroundLiveUpdater:
                     if not self.is_running:
                         break
                     try:
-                        full_match = await match_service.get_full_match(mid)
-                        changes_res = await match_service.detect_match_changes(mid)
-
-                        if changes_res.changed:
+                        client_count = websocket_manager.get_active_client_count(mid)
+                        if client_count > 0:
                             from app import _match_control_store
                             payload = {
                                 "type": "match_update",
